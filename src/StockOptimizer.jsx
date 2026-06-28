@@ -16,8 +16,13 @@ export default function StockOptimizer() {
   const [selectedStrat, setSelectedStrat] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
 
+  // Detect if local CSV data is available (not present in Vercel live-only build)
+  const localModules = import.meta.glob('/jugaad_data_download/*.csv', { query: '?raw', import: 'default' });
+  const hasLocalData = Object.keys(localModules).length > 0;
+
   // Data source toggle: 'local' (bundled CSVs) or 'live' (FastAPI backend)
-  const [dataSource, setDataSource] = useState('local');
+  // Auto-default to 'live' when no local CSVs are bundled (e.g. Vercel deployment)
+  const [dataSource, setDataSource] = useState(hasLocalData ? 'local' : 'live');
   // Period selector for live mode
   const [period, setPeriod] = useState('5y');
 
@@ -644,19 +649,25 @@ export default function StockOptimizer() {
           </p>
         </div>
         <div className="flex w-full md:w-auto gap-2 items-end">
-          <div className="flex items-center gap-2 mr-2">
-            <span className={`text-xs font-medium ${dataSource === 'local' ? 'text-emerald-400' : 'text-slate-500'}`}>Local</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={dataSource === 'live'}
-              onClick={() => { setDataSource(prev => prev === 'local' ? 'live' : 'local'); setSymbolsLoading(true); }}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${dataSource === 'live' ? 'bg-emerald-600' : 'bg-slate-600'}`}
-            >
-              <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition duration-200 ${dataSource === 'live' ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
-            <span className={`text-xs font-medium ${dataSource === 'live' ? 'text-emerald-400' : 'text-slate-500'}`}>Live</span>
-          </div>
+          {hasLocalData ? (
+            <div className="flex items-center gap-2 mr-2">
+              <span className={`text-xs font-medium ${dataSource === 'local' ? 'text-emerald-400' : 'text-slate-500'}`}>Local</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={dataSource === 'live'}
+                onClick={() => { setDataSource(prev => prev === 'local' ? 'live' : 'local'); setSymbolsLoading(true); }}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${dataSource === 'live' ? 'bg-emerald-600' : 'bg-slate-600'}`}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition duration-200 ${dataSource === 'live' ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+              <span className={`text-xs font-medium ${dataSource === 'live' ? 'text-emerald-400' : 'text-slate-500'}`}>Live</span>
+            </div>
+          ) : (
+            <span className="text-xs font-medium text-emerald-400 mr-2 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live
+            </span>
+          )}
           {dataSource === 'live' && (
             <div className="flex items-center gap-1 mr-1">
               {PERIODS.map(p => (

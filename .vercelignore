@@ -1,0 +1,5 @@
+jugaad_data_download/
+backend/
+.claude/
+dist/
+node_modules/
