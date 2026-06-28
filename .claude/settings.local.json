@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '{print $5}')",
+      "Bash(awk -F',' '{print $2}')",
+      "Bash(npm run *)",
+      "Bash(rm -f /tmp/test_extract.mjs)",
+      "Bash(npx vite *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5174/)",
+      "Bash(npx --no-install eslint src/StockOptimizer.jsx)",
+      "Bash(node -e \"require\\('@babel/core'\\)\")",
+      "Bash(node --check src/StockOptimizer.jsx)",
+      "Bash(xargs head -2)",
+      "Bash(gh auth:*)",
+      "Bash(git:*)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}
