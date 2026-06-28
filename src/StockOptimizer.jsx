@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Play, TrendingUp, BarChart2, List, ShieldAlert, CheckCircle, RefreshCw } from 'lucide-react';
+import { Play, TrendingUp, BarChart2, List, ShieldAlert, CheckCircle, RefreshCw, Download } from 'lucide-react';
 
 export default function StockOptimizer() {
   const [ticker, setTicker] = useState('RELIANCE.NS');
-  // Populated dynamically from the local bhavcopy CSVs (see the symbol-loading
-  // effect below). Seeded with RELIANCE.NS so the picker works before load.
   const [tickerOptions, setTickerOptions] = useState(['RELIANCE.NS']);
   const [symbolsLoading, setSymbolsLoading] = useState(true);
-  // Searchable-dropdown UI state.
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -18,6 +15,21 @@ export default function StockOptimizer() {
   const [strategyResults, setStrategyResults] = useState([]);
   const [selectedStrat, setSelectedStrat] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
+
+  // Data source toggle: 'local' (bundled CSVs) or 'live' (FastAPI backend)
+  const [dataSource, setDataSource] = useState('local');
+  // Period selector for live mode
+  const [period, setPeriod] = useState('5y');
+
+  const PERIODS = [
+    { value: '1y', label: '1Y' },
+    { value: '2y', label: '2Y' },
+    { value: '3y', label: '3Y' },
+    { value: '5y', label: '5Y' },
+  ];
+
+  // Resolve API base URL: use proxy in dev, env var in production
+  const API_BASE = import.meta.env.VITE_API_URL || '';
 
   // --- MATHEMATICAL MATH ENGINES (PURE JS BACKTESTERS) ---
   const calculateIndicators = (data) => {
@@ -328,6 +340,28 @@ export default function StockOptimizer() {
     let cancelled = false;
 
     const loadAllSymbols = async () => {
+      // When in live mode, fetch symbols from the backend API
+      if (dataSource === 'live') {
+        try {
+          const resp = await fetch(`${API_BASE}/api/stocks`);
+          if (resp.ok) {
+            const json = await resp.json();
+            if (!cancelled && json.symbols?.length) {
+              const options = json.symbols.map(s => `${s}.NS`);
+              if (!options.includes('RELIANCE.NS')) options.unshift('RELIANCE.NS');
+              setTickerOptions(options);
+            }
+          }
+        } catch {
+          if (!cancelled) {
+            setError('Cannot reach backend server. Make sure FastAPI is running on port 8000, or switch to Local mode.');
+          }
+        } finally {
+          if (!cancelled) setSymbolsLoading(false);
+        }
+        return;
+      }
+
       try {
         const modules = import.meta.glob('/jugaad_data_download/*.csv', { query: '?raw', import: 'default' });
         const entries = Object.entries(modules).sort(([a], [b]) => (a < b ? -1 : 1));
@@ -404,7 +438,7 @@ export default function StockOptimizer() {
 
     loadAllSymbols();
     return () => { cancelled = true; };
-  }, []);
+  }, [dataSource]);
 
   const normalizeTicker = (t) => {
     const raw = (t ?? '').toString().trim().toUpperCase();
@@ -541,6 +575,27 @@ export default function StockOptimizer() {
     return history;
   };
 
+  const loadLiveHistory = async (inputTicker) => {
+    const clean = normalizeTicker(inputTicker);
+    let resp;
+    try {
+      resp = await fetch(`${API_BASE}/api/history/${encodeURIComponent(clean)}?period=${period}`);
+    } catch (networkErr) {
+      throw new Error(
+        'Cannot reach the backend server. Make sure the FastAPI backend is running on port 8000.'
+      );
+    }
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      throw new Error(body.detail || `Backend error ${resp.status} for ${clean}`);
+    }
+    const json = await resp.json();
+    if (!json.data || json.data.length < 30) {
+      throw new Error(`Not enough live data for ${clean}. Got ${json.data?.length ?? 0} points (min 30).`);
+    }
+    return json.data;
+  };
+
   const handleAnalyze = async () => {
     if (!ticker.trim()) {
       setError("Please enter a valid stock ticker.");
@@ -551,8 +606,9 @@ export default function StockOptimizer() {
     setError(null);
 
     try {
-      // Local-only historical data path (no Yahoo / no proxy)
-      const formattedHistory = await loadJugaadBhavHistory(ticker);
+      const formattedHistory = dataSource === 'live'
+        ? await loadLiveHistory(ticker)
+        : await loadJugaadBhavHistory(ticker);
 
       setPriceHistory(formattedHistory);
       const computedInd = calculateIndicators(formattedHistory);
@@ -566,7 +622,7 @@ export default function StockOptimizer() {
       setSelectedStrat(optimizedResults[0]);
       setActiveTab('ranking');
     } catch (err) {
-      setError(err.message || 'Error occurred loading local historical data.');
+      setError(err.message || `Error occurred loading ${dataSource === 'live' ? 'live' : 'local'} historical data.`);
       setStrategyResults([]);
     } finally {
       setLoading(false);
@@ -581,9 +637,39 @@ export default function StockOptimizer() {
           <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
             <TrendingUp className="text-emerald-400" /> Stock-First Strategy Optimizer
           </h2>
-          <p className="text-sm text-slate-400 mt-1">Extract performance footprints using local Jugaad bhavcopy historical data.</p>
+          <p className="text-sm text-slate-400 mt-1">
+            {dataSource === 'live'
+              ? 'Fetching live data from NSE via backend API.'
+              : 'Extract performance footprints using local Jugaad bhavcopy historical data.'}
+          </p>
         </div>
-        <div className="flex w-full md:w-auto gap-2">
+        <div className="flex w-full md:w-auto gap-2 items-end">
+          <div className="flex items-center gap-2 mr-2">
+            <span className={`text-xs font-medium ${dataSource === 'local' ? 'text-emerald-400' : 'text-slate-500'}`}>Local</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={dataSource === 'live'}
+              onClick={() => { setDataSource(prev => prev === 'local' ? 'live' : 'local'); setSymbolsLoading(true); }}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${dataSource === 'live' ? 'bg-emerald-600' : 'bg-slate-600'}`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition duration-200 ${dataSource === 'live' ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+            <span className={`text-xs font-medium ${dataSource === 'live' ? 'text-emerald-400' : 'text-slate-500'}`}>Live</span>
+          </div>
+          {dataSource === 'live' && (
+            <div className="flex items-center gap-1 mr-1">
+              {PERIODS.map(p => (
+                <button
+                  key={p.value}
+                  onClick={() => setPeriod(p.value)}
+                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${period === p.value ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="relative flex flex-col w-full md:w-56">
             <input
               type="text"
@@ -702,7 +788,7 @@ export default function StockOptimizer() {
                       <div className="text-2xl font-mono text-white">{strategyResults[0].rrRatio === null ? '∞' : strategyResults[0].rrRatio}</div>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
-                      <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Total Trades (5Y)</div>
+                      <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Total Trades ({dataSource === 'live' ? period.toUpperCase() : '5Y'})</div>
                       <div className="text-2xl font-mono text-white">{strategyResults[0].totalTrades}</div>
                     </div>
                     <div className="bg-slate-900 p-3 rounded-lg border border-slate-800">
@@ -717,6 +803,29 @@ export default function StockOptimizer() {
 
           {activeTab === 'log' && selectedStrat && (
             <div className="flex flex-col gap-6">
+              {priceHistory.length > 0 && (
+                <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+                  <span>Data: {priceHistory[0]?.date} to {priceHistory[priceHistory.length - 1]?.date} ({priceHistory.length} trading days)</span>
+                  <button
+                    onClick={() => {
+                      const header = 'Strategy,Entry Date,Exit Date,Entry Price,Exit Price,Days Held,PnL %,Result\n';
+                      const rows = selectedStrat.trades.map(t =>
+                        `${selectedStrat.name},${t.entryDate},${t.exitDate},${t.entryPrice},${t.exitPrice},${t.daysHeld},${t.pnl},${t.type}`
+                      ).join('\n');
+                      const blob = new Blob([header + rows], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${ticker}_${selectedStrat.id}_trades.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1 bg-slate-800 border border-slate-700 rounded text-slate-300 hover:text-white hover:border-emerald-600 transition-colors"
+                  >
+                    <Download className="w-3 h-3" /> Export CSV
+                  </button>
+                </div>
+              )}
               <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
                 <div className="flex justify-between items-center mb-4">
                    <h3 className="text-lg font-semibold text-white">Base 100 Equity Curve: {selectedStrat.name}</h3>
