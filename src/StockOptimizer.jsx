@@ -584,7 +584,7 @@ export default function StockOptimizer() {
     const clean = normalizeTicker(inputTicker);
     let resp;
     try {
-      resp = await fetch(`${API_BASE}/api/history/${encodeURIComponent(clean)}?period=${period}`);
+      resp = await fetch(`${API_BASE}/api/history?symbol=${encodeURIComponent(clean)}&period=${period}`);
     } catch (networkErr) {
       throw new Error(
         'Cannot reach the backend server. Make sure the FastAPI backend is running on port 8000.'

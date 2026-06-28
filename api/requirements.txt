@@ -1,0 +1,2 @@
+jugaad-data>=0.33
+pandas
