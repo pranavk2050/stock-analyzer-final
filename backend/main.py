@@ -100,7 +100,8 @@ PERIOD_MAP = {
 
 
 @app.get("/api/history/{symbol}")
-def stock_history(symbol: str, period: str = "5y"):
+@app.get("/api/history")
+def stock_history(symbol: str = "", period: str = "5y"):
     # Strip .NS / .NSE suffix that the frontend may pass
     clean = symbol.strip().upper().replace(".NS", "").replace(".NSE", "")
     if not clean:
