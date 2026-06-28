@@ -2,6 +2,12 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import date, timedelta
 import json
+import os
+
+# jugaad-data tries to write cache files to home dir; on Vercel serverless
+# the filesystem is read-only except /tmp
+os.environ.setdefault("HOME", "/tmp")
+os.makedirs("/tmp/.jugaad_data", exist_ok=True)
 
 PERIOD_MAP = {
     "1y": 365,

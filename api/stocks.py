@@ -1,5 +1,8 @@
 from http.server import BaseHTTPRequestHandler
 import json
+import os
+
+os.environ.setdefault("HOME", "/tmp")
 
 FALLBACK_SYMBOLS = [
     "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR",
